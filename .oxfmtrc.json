@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "arrowParens": "avoid",
+  "objectWrap": "collapse",
+  "overrides": [{ "files": ["**/*.css"], "options": { "singleQuote": false, "useTabs": true } }],
+  "semi": false,
+  "singleQuote": true,
+  "sortImports": true,
+  "sortTailwindcss": true
+}
