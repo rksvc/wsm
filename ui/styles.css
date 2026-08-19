@@ -10,4 +10,7 @@
 	button {
 		transform: none;
 	}
+	dialog {
+		animation: none;
+	}
 }

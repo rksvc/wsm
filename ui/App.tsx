@@ -6,7 +6,6 @@ import {
   IconButton,
   List,
   ListItem,
-  ShowToastFn,
   Skeleton,
   Text,
   TopNav,
@@ -14,6 +13,8 @@ import {
   TopNavItem,
   TreeList,
   TreeListItemData,
+  useImperativeAlertDialog,
+  useImperativeDialog,
   useToast,
   VStack,
 } from '@astryxdesign/core'
@@ -21,8 +22,9 @@ import { Play, Plus, RotateCcw, Square, SquarePen } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 import Logo from './assets/icon.svg?react'
+import ServiceEditor from './ServiceEditor.tsx'
 
-enum StartType {
+export enum StartType {
   AutoStart,
   AutoStartDelayed,
   Manual,
@@ -57,14 +59,26 @@ const actionToIcon = { Start: Play, Stop: Square } as const
 
 export default function App() {
   const toast = useToast()
+  const dialog = useImperativeDialog({ purpose: 'form' })
+  const alert = useImperativeAlertDialog()
+  const showAlert = (error: string) =>
+    alert.show({
+      title: 'Error',
+      description: error,
+      actionLabel: 'OK',
+      actionVariant: 'secondary',
+      onAction: alert.hide,
+    })
   const [services, setServices] = useState<Service[] | undefined>(undefined)
+  const [reconnect, setReconnect] = useState({})
   const ws = useRef<WebSocket>(null)
   useEffect(() => {
     const { protocol, host, pathname } = location
     const socket = new WebSocket(
       `${protocol === 'https:' ? 'wss:' : 'ws:'}//${host}${pathname}api/services`,
     )
-    socket.onclose = evt => toast({ body: `WebSocket closed: ${evt.code}`, type: 'error' })
+    socket.onclose = evt =>
+      evt.code !== 1000 && toast({ body: `WebSocket closed: ${evt.code}`, type: 'error' })
     socket.onerror = () => toast({ body: 'A WebSocket error occurred', type: 'error' })
     socket.onmessage = evt => {
       const data = JSON.parse(evt.data)
@@ -76,15 +90,39 @@ export default function App() {
         )
     }
     ws.current = socket
-    return () => socket.close()
-  }, [toast])
+    return () => socket.close(1000)
+  }, [toast, reconnect])
 
   return (
     <>
       <TopNav
         className="sticky top-0 z-1 bg-zinc-100 landscape:px-[calc(50vw-50vh)] dark:bg-zinc-800"
         heading={<TopNavHeading heading="Windows Service Manager" logo={<Icon icon={Logo} />} />}
-        endContent={<TopNavItem label="New" icon={<Icon icon={Plus} size="sm" />} isIconOnly />}
+        endContent={
+          <TopNavItem
+            label="New"
+            icon={<Icon icon={Plus} size="sm" />}
+            onClick={() =>
+              dialog.show(
+                <ServiceEditor
+                  submit={async svc => {
+                    if (
+                      (await xfetch('/api/services', showAlert, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(svc),
+                      })) != null
+                    ) {
+                      setReconnect({})
+                      dialog.hide()
+                    }
+                  }}
+                  close={dialog.hide}
+                />,
+              )
+            }
+          />
+        }
       />
       <div className="landscape:px-[calc(50vw-50vh)]">
         {services ? (
@@ -122,26 +160,18 @@ export default function App() {
                       variant="ghost"
                       isDisabled={status === 'Stopped' && !processes}
                       clickAction={async () => {
-                        try {
-                          if (processes) {
-                            setServices(srvs =>
-                              srvs?.map((srv, j) =>
-                                j === i ? { ...srv, processes: undefined } : srv,
-                              ),
-                            )
-                          } else {
-                            const response = await fetch(`/api/services/${name}/processes`)
-                            const json = await response.json()
-                            if (json.message) {
-                              toast({ body: json.message, type: 'error' })
-                              return
-                            }
+                        if (processes) {
+                          setServices(srvs =>
+                            srvs?.map((srv, j) =>
+                              j === i ? { ...srv, processes: undefined } : srv,
+                            ),
+                          )
+                        } else {
+                          const json = await xfetch(`/api/services/${name}/processes`, showAlert)
+                          if (json != null)
                             setServices(srvs =>
                               srvs?.map((srv, j) => (j === i ? { ...srv, processes: json } : srv)),
                             )
-                          }
-                        } catch (error) {
-                          toast({ body: String(error), type: 'error' })
                         }
                       }}
                     />
@@ -157,7 +187,11 @@ export default function App() {
                           status,
                         )}
                         clickAction={() =>
-                          put(`${name}/${status === 'Running' ? 'stop' : 'start'}`, toast)
+                          xfetch(
+                            `/api/services/${name}/${status === 'Running' ? 'stop' : 'start'}`,
+                            showAlert,
+                            { method: 'PUT' },
+                          )
                         }
                       />
                       <IconButton
@@ -172,7 +206,9 @@ export default function App() {
                           'Continuing',
                           'Pausing',
                         ].includes(status)}
-                        clickAction={() => put(`${name}/restart`, toast)}
+                        clickAction={() =>
+                          xfetch(`/api/services/${name}/restart`, showAlert, { method: 'PUT' })
+                        }
                       />
                       <IconButton
                         label="Edit"
@@ -197,6 +233,8 @@ export default function App() {
           </VStack>
         )}
       </div>
+      {dialog.isOpen && dialog.element}
+      {alert.element}
     </>
   )
 }
@@ -211,15 +249,20 @@ function toTreeListItemData({ pid, exe, children }: ProcessTree): TreeListItemDa
   }
 }
 
-async function put(path: string, toast: ShowToastFn) {
+async function xfetch(
+  input: RequestInfo | URL,
+  showError: (error: string) => void,
+  init?: RequestInit,
+) {
   try {
-    const response = await fetch(`/api/services/${path}`, { method: 'PUT' })
+    const response = await fetch(input, init)
     const json = await response.json()
     if (json.message) {
-      toast({ body: json.message, type: 'error' })
+      showError(json.message)
       return
     }
+    return json
   } catch (error) {
-    toast({ body: String(error), type: 'error' })
+    showError(String(error))
   }
 }

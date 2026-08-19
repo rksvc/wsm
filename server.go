@@ -219,6 +219,7 @@ func (s *Server) InstallService(c *echo.Context) error {
 	}
 	defer srv.Close()
 	if err := SetConfig(body.Name, body.Config); err != nil {
+		srv.Delete()
 		return NewServerError(err)
 	}
 	return c.JSON(http.StatusOK, struct{}{})
