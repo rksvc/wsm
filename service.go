@@ -95,7 +95,7 @@ func command(ctx context.Context, c *Config) (*exec.Cmd, windows.Handle, error) 
 		cmd.Stdin = f
 	}
 	if c.Stdout != "" {
-		f, err := os.OpenFile(c.Stdout, os.O_APPEND|os.O_CREATE, 0)
+		f, err := os.OpenFile(c.Stdout, os.O_APPEND|os.O_CREATE, 0666)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -105,7 +105,7 @@ func command(ctx context.Context, c *Config) (*exec.Cmd, windows.Handle, error) 
 		if c.Stderr == c.Stdout {
 			cmd.Stderr = cmd.Stdout
 		} else {
-			f, err := os.OpenFile(c.Stderr, os.O_APPEND|os.O_CREATE, 0)
+			f, err := os.OpenFile(c.Stderr, os.O_APPEND|os.O_CREATE, 0666)
 			if err != nil {
 				return nil, 0, err
 			}
