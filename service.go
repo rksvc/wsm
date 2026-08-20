@@ -4,15 +4,20 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/eventlog"
 )
+
+var kernel32 = syscall.MustLoadDLL("kernel32.dll")
 
 type Handler struct {
 	name string
@@ -30,22 +35,38 @@ func (h *Handler) Execute(args []string, r <-chan svc.ChangeRequest, changes cha
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cmd, job, err := command(ctx, c)
+	cmd, job, err := command(ctx, c, h)
 	if err != nil {
 		h.log(1002, err)
 		changes <- svc.Status{State: svc.StopPending}
 		return
 	}
 	defer windows.CloseHandle(job)
-	go func() {
-		cmd.Wait()
-		cancel()
-	}()
 	changes <- svc.Status{State: svc.Running, Accepts: svc.AcceptStop | svc.AcceptShutdown}
 loop:
 	for {
 		select {
 		case <-ctx.Done():
+			changes <- svc.Status{State: svc.StopPending}
+			if err := cmd.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+				h.log(1003, err)
+			}
+
+			var add int32
+			r, _, err := kernel32.MustFindProc("SetConsoleCtrlHandler").Call(0, uintptr(unsafe.Pointer(&add)))
+			if r == 0 {
+				h.log(1010, err)
+			}
+
+			if cmd.Stdin != nil {
+				cmd.Stdin.(*os.File).Close()
+			}
+			if cmd.Stdout != nil {
+				cmd.Stdout.(*os.File).Close()
+			}
+			if cmd.Stderr != nil && cmd.Stderr != cmd.Stdout {
+				cmd.Stderr.(*os.File).Close()
+			}
 			break loop
 		case c := <-r:
 			switch c.Cmd {
@@ -56,7 +77,6 @@ loop:
 			}
 		}
 	}
-	changes <- svc.Status{State: svc.StopPending}
 	return
 }
 
@@ -64,7 +84,7 @@ func (h *Handler) log(eid uint32, err error) {
 	h.elog.Error(eid, fmt.Sprintf("[%s] %s", h.name, err))
 }
 
-func command(ctx context.Context, c *Config) (*exec.Cmd, windows.Handle, error) {
+func command(ctx context.Context, c *Config, h *Handler) (*exec.Cmd, windows.Handle, error) {
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
 		return nil, 0, err
@@ -112,6 +132,33 @@ func command(ctx context.Context, c *Config) (*exec.Cmd, windows.Handle, error) 
 			cmd.Stderr = f
 		}
 	}
+	cmd.Cancel = func() error {
+		r, _, err := kernel32.MustFindProc("AttachConsole").Call(uintptr(cmd.Process.Pid))
+		if r == 0 {
+			switch err.(syscall.Errno) {
+			case windows.ERROR_INVALID_HANDLE: // no console
+				return cmd.Process.Kill()
+			case windows.ERROR_GEN_FAILURE: // already exited
+				return nil
+			default:
+				h.log(1007, err)
+				return err
+			}
+		}
+		defer kernel32.MustFindProc("FreeConsole").Call()
+		var add int32 = 1
+		r, _, err = kernel32.MustFindProc("SetConsoleCtrlHandler").Call(0, uintptr(unsafe.Pointer(&add)))
+		if r == 0 {
+			h.log(1008, err)
+			return err
+		}
+		err = windows.GenerateConsoleCtrlEvent(syscall.CTRL_C_EVENT, 0)
+		if err != nil {
+			h.log(1009, err)
+		}
+		return err
+	}
+	cmd.WaitDelay = 1500 * time.Millisecond
 
 	if err := cmd.Start(); err != nil {
 		return nil, 0, err
