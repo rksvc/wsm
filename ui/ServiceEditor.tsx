@@ -62,6 +62,8 @@ export default function ServiceEditor({
   )
 
   const alert = useImperativeAlertDialog()
+  const [nameError, setNameError] = useState<undefined | true>(undefined)
+  const [exeError, setExeError] = useState<undefined | true>(undefined)
   const [isLoading, setIsLoading] = useState(false)
 
   return (
@@ -73,18 +75,26 @@ export default function ServiceEditor({
             <TextInput
               label="Name"
               value={name}
-              onChange={setName}
+              onChange={name => {
+                setName(name)
+                setNameError(undefined)
+              }}
               disabledMessage="The service name is immutable"
               hasAutoFocus={!cfg}
               isDisabled={Boolean(cfg)}
+              status={nameError && { type: 'error', message: 'Name is required' }}
               isRequired
               hasClear
             />
             <TextInput
               label="Path"
               value={exe}
-              onChange={setExe}
+              onChange={exe => {
+                setExe(exe)
+                setExeError(undefined)
+              }}
               hasAutoFocus={Boolean(cfg)}
+              status={exeError && { type: 'error', message: 'Path is required' }}
               isRequired
               hasClear
             />
@@ -185,8 +195,10 @@ export default function ServiceEditor({
               label="Submit"
               variant="primary"
               isLoading={isLoading}
-              clickAction={() =>
-                submit({
+              clickAction={async () => {
+                if (!name) return setNameError(true)
+                if (!exe) return setExeError(true)
+                await submit({
                   name,
                   exe,
                   flags,
@@ -199,7 +211,7 @@ export default function ServiceEditor({
                   dependencies: deps.split('\n').filter(Boolean),
                   start_type: StartType[startType],
                 })
-              }
+              }}
             />
           </HStack>
           {alert.element}
