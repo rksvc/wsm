@@ -167,7 +167,10 @@ export default function App() {
                             ),
                           )
                         } else {
-                          const json = await xfetch(`/api/services/${name}/processes`, showAlert)
+                          const json = await xfetch(
+                            `/api/services/${encodeURIComponent(name)}/processes`,
+                            showAlert,
+                          )
                           if (json != null)
                             setServices(srvs =>
                               srvs?.map((srv, j) => (j === i ? { ...srv, processes: json } : srv)),
@@ -188,7 +191,7 @@ export default function App() {
                         )}
                         clickAction={() =>
                           xfetch(
-                            `/api/services/${name}/${status === 'Running' ? 'stop' : 'start'}`,
+                            `/api/services/${encodeURIComponent(name)}/${status === 'Running' ? 'stop' : 'start'}`,
                             showAlert,
                             { method: 'PUT' },
                           )
@@ -207,7 +210,9 @@ export default function App() {
                           'Pausing',
                         ].includes(status)}
                         clickAction={() =>
-                          xfetch(`/api/services/${name}/restart`, showAlert, { method: 'PUT' })
+                          xfetch(`/api/services/${encodeURIComponent(name)}/restart`, showAlert, {
+                            method: 'PUT',
+                          })
                         }
                       />
                       <IconButton
@@ -216,18 +221,25 @@ export default function App() {
                         icon={<Icon icon={SquarePen} size="sm" />}
                         variant="ghost"
                         clickAction={async () => {
-                          const cfg = await xfetch(`/api/services/${name}/config`, showAlert)
+                          const cfg = await xfetch(
+                            `/api/services/${encodeURIComponent(name)}/config`,
+                            showAlert,
+                          )
                           if (cfg != null)
                             dialog.show(
                               <ServiceEditor
                                 cfg={{ ...cfg, name }}
                                 submit={async svc => {
                                   if (
-                                    (await xfetch(`/api/services/${name}`, showAlert, {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify(svc),
-                                    })) != null
+                                    (await xfetch(
+                                      `/api/services/${encodeURIComponent(name)}`,
+                                      showAlert,
+                                      {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify(svc),
+                                      },
+                                    )) != null
                                   ) {
                                     setReconnect({})
                                     dialog.hide()
@@ -235,9 +247,11 @@ export default function App() {
                                 }}
                                 remove={async () => {
                                   if (
-                                    (await xfetch(`/api/services/${name}`, showAlert, {
-                                      method: 'DELETE',
-                                    })) != null
+                                    (await xfetch(
+                                      `/api/services/${encodeURIComponent(name)}`,
+                                      showAlert,
+                                      { method: 'DELETE' },
+                                    )) != null
                                   ) {
                                     setReconnect({})
                                     dialog.hide()
