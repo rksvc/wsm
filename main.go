@@ -73,6 +73,7 @@ func main() {
 		log.Fatal(err)
 	}
 	e := echo.New()
+	e.Use(middleware.Gzip())
 	e.Use(middleware.RequestLogger())
 	e.GET("/*", echo.WrapHandler(http.FileServer(http.FS(dist))))
 	api := e.Group("/api")
