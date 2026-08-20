@@ -71,6 +71,7 @@ func main() {
 	api.GET("/services", s.Services)
 	api.POST("/services", s.InstallService)
 	api.POST("/services/:name", s.EditService)
+	api.GET("/services/:name/config", s.ServiceConfig)
 	api.GET("/services/:name/processes", s.ServiceProcesses)
 	api.PUT("/services/:name/start", s.StartService)
 	api.PUT("/services/:name/stop", s.StopService)

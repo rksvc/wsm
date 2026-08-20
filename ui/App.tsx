@@ -152,7 +152,7 @@ export default function App() {
                       />
                     </HStack>
                   }
-                  description={<Text maxLines={1}>{description}</Text>}
+                  description={description}
                   startContent={
                     <IconButton
                       label="Collapse"
@@ -215,6 +215,38 @@ export default function App() {
                         tooltip="Edit"
                         icon={<Icon icon={SquarePen} size="sm" />}
                         variant="ghost"
+                        clickAction={async () => {
+                          const cfg = await xfetch(`/api/services/${name}/config`, showAlert)
+                          if (cfg != null)
+                            dialog.show(
+                              <ServiceEditor
+                                cfg={{ ...cfg, name }}
+                                submit={async svc => {
+                                  if (
+                                    (await xfetch(`/api/services/${name}`, showAlert, {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify(svc),
+                                    })) != null
+                                  ) {
+                                    setReconnect({})
+                                    dialog.hide()
+                                  }
+                                }}
+                                remove={async () => {
+                                  if (
+                                    (await xfetch(`/api/services/${name}`, showAlert, {
+                                      method: 'DELETE',
+                                    })) != null
+                                  ) {
+                                    setReconnect({})
+                                    dialog.hide()
+                                  }
+                                }}
+                                close={dialog.hide}
+                              />,
+                            )
+                        }}
                       />
                     </ButtonGroup>
                   }

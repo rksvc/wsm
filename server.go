@@ -153,22 +153,9 @@ func (s *Server) Services(c *echo.Context) error {
 		if err != nil {
 			return ws.WriteJSON(NewServerError(err).Message)
 		}
-		var startType StartType
-		switch c.StartType {
-		case windows.SERVICE_AUTO_START:
-			if c.DelayedAutoStart {
-				startType = AUTO_START_DELAYED
-			} else {
-				startType = AUTO_START
-			}
-		case windows.SERVICE_DEMAND_START:
-			startType = MANUAL
-		case windows.SERVICE_DISABLED:
-			startType = DISABLED
-		}
 		srvs = append(srvs, Service{
 			Name:        name,
-			StartType:   startType,
+			StartType:   getStartType(&c),
 			Description: c.Description,
 			Status:      StateString[status.State],
 		})
@@ -242,6 +229,8 @@ func (s *Server) EditService(c *echo.Context) error {
 	}
 	defer srv.Close()
 	err = srv.UpdateConfig(mgr.Config{
+		ServiceType:      windows.SERVICE_NO_CHANGE,
+		ErrorControl:     windows.SERVICE_NO_CHANGE,
 		StartType:        startType,
 		Dependencies:     body.Dependencies,
 		Description:      body.Description,
@@ -250,10 +239,52 @@ func (s *Server) EditService(c *echo.Context) error {
 	if err != nil {
 		return NewServerError(err)
 	}
+	if len(body.Dependencies) == 0 {
+		deps := []uint16{0}
+		err = windows.ChangeServiceConfig(
+			srv.Handle,
+			windows.SERVICE_NO_CHANGE,
+			windows.SERVICE_NO_CHANGE,
+			windows.SERVICE_NO_CHANGE,
+			nil,
+			nil,
+			nil,
+			&deps[0],
+			nil,
+			nil,
+			nil,
+		)
+		if err != nil {
+			return NewServerError(err)
+		}
+	}
 	if err := SetConfig(name, body.Config); err != nil {
 		return NewServerError(err)
 	}
 	return c.JSON(http.StatusOK, struct{}{})
+}
+
+func (s *Server) ServiceConfig(c *echo.Context) error {
+	name := c.Param("name")
+	srv, err := s.m.OpenService(name)
+	if err != nil {
+		return NewServerError(err)
+	}
+	defer srv.Close()
+	cfg, err := srv.Config()
+	if err != nil {
+		return NewServerError(err)
+	}
+	config, err := GetConfig(name)
+	if err != nil {
+		return NewServerError(err)
+	}
+	return c.JSON(http.StatusOK, ServiceRequest{
+		StartType:    getStartType(&cfg),
+		Dependencies: cfg.Dependencies,
+		Description:  cfg.Description,
+		Config:       *config,
+	})
 }
 
 func (s *Server) ServiceProcesses(c *echo.Context) error {
@@ -379,4 +410,20 @@ func NewServerError(err error) *echo.HTTPError {
 		s = err.Error()
 	}
 	return echo.NewHTTPError(http.StatusInternalServerError, s)
+}
+
+func getStartType(c *mgr.Config) StartType {
+	switch c.StartType {
+	case windows.SERVICE_AUTO_START:
+		if c.DelayedAutoStart {
+			return AUTO_START_DELAYED
+		} else {
+			return AUTO_START
+		}
+	case windows.SERVICE_DEMAND_START:
+		return MANUAL
+	case windows.SERVICE_DISABLED:
+		return DISABLED
+	}
+	panic(fmt.Errorf("invalid start type: %d", c.StartType))
 }

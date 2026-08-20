@@ -15,12 +15,14 @@ import {
   Text,
   TextArea,
   TextInput,
+  useImperativeAlertDialog,
 } from '@astryxdesign/core'
 import { useState } from 'react'
 
 import { StartType } from './App.tsx'
 
-interface Service {
+interface Config {
+  name: string
   description: string
   exe: string
   flags: string[]
@@ -34,51 +36,55 @@ interface Service {
 }
 
 export default function ServiceEditor({
-  name,
+  cfg,
   submit,
-  close,
   remove,
+  close,
 }: {
-  name?: string
-  submit: (svc: Service & { name: string }) => Promise<void>
-  close: () => void
+  cfg?: Config
+  submit: (c: Config) => Promise<void>
   remove?: () => Promise<void>
+  close: () => void
 }) {
-  const [svcName, setSvcName] = useState(name || '')
-  const [desc, setDesc] = useState('')
-  const [exe, setExe] = useState('')
+  const [name, setName] = useState(cfg?.name ?? '')
+  const [desc, setDesc] = useState(cfg?.description ?? '')
+  const [exe, setExe] = useState(cfg?.exe ?? '')
   const [flag, setFlag] = useState('')
-  const [flags, setFlags] = useState<string[]>([])
-  const [dir, setDir] = useState('')
-  const [stdin, setStdin] = useState('')
-  const [stdout, setStdout] = useState('')
-  const [stderr, setStderr] = useState('')
-  const [env, setEnv] = useState('')
-  const [deps, setDeps] = useState('')
-  const [startType, setStartType] = useState<keyof typeof StartType>('AutoStart')
+  const [flags, setFlags] = useState<string[]>(cfg?.flags ?? [])
+  const [dir, setDir] = useState(cfg?.dir ?? '')
+  const [stdin, setStdin] = useState(cfg?.stdin ?? '')
+  const [stdout, setStdout] = useState(cfg?.stdout ?? '')
+  const [stderr, setStderr] = useState(cfg?.stderr ?? '')
+  const [env, setEnv] = useState(cfg?.env.join('\n') ?? '')
+  const [deps, setDeps] = useState(cfg?.dependencies.join('\n') ?? '')
+  const [startType, setStartType] = useState<keyof typeof StartType>(
+    cfg == null ? 'AutoStart' : (StartType[cfg.start_type] as keyof typeof StartType),
+  )
+
+  const alert = useImperativeAlertDialog()
+  const [isLoading, setIsLoading] = useState(false)
 
   return (
     <Layout
-      header={<DialogHeader title={`${name ? 'Edit' : 'New'} service`} onOpenChange={close} />}
+      header={<DialogHeader title={`${cfg ? 'Edit' : 'New'} service`} onOpenChange={close} />}
       content={
         <LayoutContent>
           <FormLayout>
             <TextInput
               label="Name"
-              value={svcName}
-              onChange={setSvcName}
+              value={name}
+              onChange={setName}
               disabledMessage="The service name is immutable"
-              hasAutoFocus={!name}
-              isDisabled={Boolean(name)}
+              hasAutoFocus={!cfg}
+              isDisabled={Boolean(cfg)}
               isRequired
               hasClear
             />
-            <TextInput label="Description" value={desc} onChange={setDesc} hasClear />
             <TextInput
               label="Path"
               value={exe}
               onChange={setExe}
-              hasAutoFocus={Boolean(name)}
+              hasAutoFocus={Boolean(cfg)}
               isRequired
               hasClear
             />
@@ -127,6 +133,7 @@ export default function ServiceEditor({
               </HStack>
             </Stack>
             <TextInput label="Startup directory" value={dir} onChange={setDir} hasClear />
+            <TextInput label="Description" value={desc} onChange={setDesc} hasClear />
             <TextInput label="Input (stdin)" value={stdin} onChange={setStdin} hasClear />
             <TextInput label="Output (stdout)" value={stdout} onChange={setStdout} hasClear />
             <TextInput label="Error (stderr)" value={stderr} onChange={setStderr} hasClear />
@@ -154,18 +161,39 @@ export default function ServiceEditor({
       footer={
         <LayoutFooter>
           <HStack gap={2} hAlign="end">
+            {cfg && remove && (
+              <Button
+                label="Delete"
+                variant="destructive"
+                isLoading={isLoading}
+                clickAction={() =>
+                  alert.show({
+                    title: `Delete ${cfg.name}`,
+                    description: `Are you sure you want to delete ${cfg.name}?`,
+                    actionLabel: 'Delete',
+                    onAction: async () => {
+                      setIsLoading(true)
+                      alert.hide()
+                      await remove()
+                      setIsLoading(false)
+                    },
+                  })
+                }
+              />
+            )}
             <Button
               label="Submit"
               variant="primary"
+              isLoading={isLoading}
               clickAction={() =>
                 submit({
+                  name,
                   exe,
                   flags,
                   dir,
                   stdin,
                   stdout,
                   stderr,
-                  name: svcName,
                   description: desc,
                   env: env.split('\n').filter(Boolean),
                   dependencies: deps.split('\n').filter(Boolean),
@@ -173,8 +201,8 @@ export default function ServiceEditor({
                 })
               }
             />
-            {name && <Button label="Delete" variant="destructive" clickAction={remove} />}
           </HStack>
+          {alert.element}
         </LayoutFooter>
       }
     />
