@@ -17,6 +17,7 @@ import (
 	"github.com/labstack/echo/v5/middleware"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
+	"golang.org/x/sys/windows/svc/eventlog"
 )
 
 //go:embed dist
@@ -38,8 +39,15 @@ func main() {
 	if isService, err := svc.IsWindowsService(); err != nil {
 		log.Fatal(err)
 	} else if isService {
-		if err := svc.Run("WSM", &Handler{}); err != nil {
+		const WSM = "WSM"
+		eventlog.InstallAsEventCreate(WSM, eventlog.Error|eventlog.Warning|eventlog.Info)
+		elog, err := eventlog.Open(WSM)
+		if err != nil {
 			log.Fatal(err)
+		}
+		defer elog.Close()
+		if err := svc.Run(WSM, &Handler{elog: elog}); err != nil {
+			elog.Error(1000, err.Error())
 		}
 		return
 	}

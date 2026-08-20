@@ -4,20 +4,27 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
+	"golang.org/x/sys/windows/svc/eventlog"
 )
 
-type Handler struct{}
+type Handler struct {
+	name string
+	elog *eventlog.Log
+}
 
 func (h *Handler) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (ssec bool, errno uint32) {
 	changes <- svc.Status{State: svc.StartPending}
-	c, err := GetConfig(args[0])
+	h.name = args[0]
+	c, err := GetConfig(h.name)
 	if err != nil {
+		h.log(1001, err)
 		changes <- svc.Status{State: svc.StopPending}
 		return
 	}
@@ -25,6 +32,7 @@ func (h *Handler) Execute(args []string, r <-chan svc.ChangeRequest, changes cha
 	defer cancel()
 	cmd, job, err := command(ctx, c)
 	if err != nil {
+		h.log(1002, err)
 		changes <- svc.Status{State: svc.StopPending}
 		return
 	}
@@ -50,6 +58,10 @@ loop:
 	}
 	changes <- svc.Status{State: svc.StopPending}
 	return
+}
+
+func (h *Handler) log(eid uint32, err error) {
+	h.elog.Error(eid, fmt.Sprintf("[%s] %s", h.name, err))
 }
 
 func command(ctx context.Context, c *Config) (*exec.Cmd, windows.Handle, error) {
