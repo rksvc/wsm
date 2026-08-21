@@ -29,7 +29,7 @@ func (h *Handler) Execute(args []string, r <-chan svc.ChangeRequest, changes cha
 	h.name = args[0]
 	c, err := GetConfig(h.name)
 	if err != nil {
-		h.log(1001, err)
+		h.log(2, err)
 		changes <- svc.Status{State: svc.StopPending}
 		return
 	}
@@ -37,7 +37,7 @@ func (h *Handler) Execute(args []string, r <-chan svc.ChangeRequest, changes cha
 	defer cancel()
 	cmd, job, err := command(ctx, c, h)
 	if err != nil {
-		h.log(1002, err)
+		h.log(3, err)
 		changes <- svc.Status{State: svc.StopPending}
 		return
 	}
@@ -49,13 +49,13 @@ loop:
 		case <-ctx.Done():
 			changes <- svc.Status{State: svc.StopPending}
 			if err := cmd.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-				h.log(1003, err)
+				h.log(7, err)
 			}
 
 			var add int32
 			r, _, err := kernel32.MustFindProc("SetConsoleCtrlHandler").Call(0, uintptr(unsafe.Pointer(&add)))
 			if r == 0 {
-				h.log(1010, err)
+				h.log(8, err)
 			}
 
 			if cmd.Stdin != nil {
@@ -141,7 +141,7 @@ func command(ctx context.Context, c *Config, h *Handler) (*exec.Cmd, windows.Han
 			case windows.ERROR_GEN_FAILURE: // already exited
 				return nil
 			default:
-				h.log(1007, err)
+				h.log(4, err)
 				return err
 			}
 		}
@@ -149,12 +149,12 @@ func command(ctx context.Context, c *Config, h *Handler) (*exec.Cmd, windows.Han
 		var add int32 = 1
 		r, _, err = kernel32.MustFindProc("SetConsoleCtrlHandler").Call(0, uintptr(unsafe.Pointer(&add)))
 		if r == 0 {
-			h.log(1008, err)
+			h.log(5, err)
 			return err
 		}
 		err = windows.GenerateConsoleCtrlEvent(syscall.CTRL_C_EVENT, 0)
 		if err != nil {
-			h.log(1009, err)
+			h.log(6, err)
 		}
 		return err
 	}

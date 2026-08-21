@@ -47,7 +47,7 @@ func main() {
 		}
 		defer elog.Close()
 		if err := svc.Run(WSM, &Handler{elog: elog}); err != nil {
-			elog.Error(1000, err.Error())
+			elog.Error(1, err.Error())
 		}
 		return
 	}
