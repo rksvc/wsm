@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -41,6 +42,13 @@ func (h *Handler) Execute(args []string, r <-chan svc.ChangeRequest, changes cha
 		changes <- svc.Status{State: svc.StopPending}
 		return
 	}
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		if err := cmd.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+			h.log(7, err)
+		}
+		cancel()
+	})
 	defer windows.CloseHandle(job)
 	changes <- svc.Status{State: svc.Running, Accepts: svc.AcceptStop | svc.AcceptShutdown}
 loop:
@@ -48,10 +56,8 @@ loop:
 		select {
 		case <-ctx.Done():
 			changes <- svc.Status{State: svc.StopPending}
-			if err := cmd.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-				h.log(7, err)
-			}
 
+			wg.Wait()
 			var add int32
 			r, _, err := kernel32.MustFindProc("SetConsoleCtrlHandler").Call(0, uintptr(unsafe.Pointer(&add)))
 			if r == 0 {
