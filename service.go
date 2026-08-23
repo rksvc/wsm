@@ -36,7 +36,7 @@ func (h *Handler) Execute(args []string, r <-chan svc.ChangeRequest, changes cha
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cmd, job, err := command(ctx, c, h)
+	cmd, job, err := h.command(ctx, c)
 	if err != nil {
 		h.log(3, err)
 		changes <- svc.Status{State: svc.StopPending}
@@ -90,7 +90,7 @@ func (h *Handler) log(eid uint32, err error) {
 	h.elog.Error(eid, fmt.Sprintf("[%s] %s", h.name, err))
 }
 
-func command(ctx context.Context, c *Config, h *Handler) (*exec.Cmd, windows.Handle, error) {
+func (h *Handler) command(ctx context.Context, c *Config) (*exec.Cmd, windows.Handle, error) {
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
 		return nil, 0, err
