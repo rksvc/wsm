@@ -103,6 +103,7 @@ func main() {
 								Children: []Widget{
 									PushButton{
 										Text:      "New",
+										Enabled:   Bind("tv.CurrentIndex != -1"),
 										OnClicked: m.buttonNewServiceClick,
 									},
 									PushButton{
