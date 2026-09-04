@@ -5,7 +5,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -167,7 +166,7 @@ func (m *Model) newServiceChangeNotificationCallback(name string, srv *mgr.Servi
 	return windows.NewCallback(func(notify uint32, context uintptr) uintptr {
 		status, err := srv.Query()
 		if err != nil {
-			m.Error(err)
+			m.Error(NewError(err))
 			return 0
 		}
 		index := slices.IndexFunc(m.table.services, func(s *Service) bool {
@@ -181,7 +180,7 @@ func (m *Model) newServiceChangeNotificationCallback(name string, srv *mgr.Servi
 		m.table.PublishRowChanged(index)
 		if m.tv != nil {
 			if err := m.tv.SetCurrentIndex(m.tv.CurrentIndex()); err != nil {
-				m.Error(err)
+				m.Error(NewError(err))
 			}
 		}
 		return 0
@@ -216,13 +215,13 @@ func (m *Model) tableCurrentIndexChanged() {
 		}
 	}
 	if err := m.db.Reset(); err != nil {
-		m.Error(err)
+		m.Error(NewError(err))
 	}
 }
 
 func (m *Model) buttonNewServiceClick() {
 	if err := m.tv.SetCurrentIndex(-1); err != nil {
-		m.Error(err)
+		m.Error(NewError(err))
 	}
 }
 
@@ -270,10 +269,10 @@ func (m *Model) buttonRemoveClick() {
 	if walk.MsgBox(m.mw, "", "Are you sure to delete "+srv.Name+"?", walk.MsgBoxYesNo) == walk.DlgCmdYes {
 		err := windows.UnsubscribeServiceChangeNotifications(srv.subscription)
 		if err != nil {
-			m.Error(err)
+			m.Error(NewError(err))
 			return
 		} else if err := srv.srv.Delete(); err != nil {
-			m.Error(err)
+			m.Error(NewError(err))
 			return
 		}
 		srv.srv.Close()
@@ -285,7 +284,7 @@ func (m *Model) buttonRemoveClick() {
 func (m *Model) buttonSaveClick() {
 	err := m.db.Submit()
 	if err != nil {
-		m.Error(err)
+		m.Error(NewError(err))
 		return
 	}
 
@@ -348,7 +347,7 @@ func (m *Model) buttonSaveClick() {
 		index = len(m.table.services) - 1
 		m.table.PublishRowsInserted(index, index)
 		if err := m.tv.SetCurrentIndex(-1); err != nil {
-			m.Error(err)
+			m.Error(NewError(err))
 			return
 		}
 	} else {
@@ -415,10 +414,10 @@ func (m *Model) chooseFileFor(edit **walk.LineEdit, folder bool) func() {
 			accept, err = dlg.ShowOpen(owner)
 		}
 		if err != nil {
-			m.Error(err)
+			m.Error(NewError(err))
 		} else if accept {
 			if err := (*edit).SetText(dlg.FilePath); err != nil {
-				m.Error(err)
+				m.Error(NewError(err))
 			}
 		}
 	}
@@ -438,11 +437,6 @@ func (m *Model) Error(err error) {
 		owner = m.mw
 	}
 	walk.MsgBox(owner, "", err.Error(), walk.MsgBoxIconError)
-}
-
-func (m *Model) Fatal(err error) {
-	m.Error(err)
-	os.Exit(1)
 }
 
 func getStartType(startType uint32, delayedAutoStart bool) string {

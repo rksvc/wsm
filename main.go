@@ -53,7 +53,8 @@ func main() {
 
 	m, err := NewModel()
 	if err != nil {
-		m.Fatal(err)
+		m.Error(err)
+		os.Exit(1)
 	}
 
 	window := MainWindow{
@@ -232,7 +233,8 @@ func main() {
 		},
 	}
 	if err := window.Create(); err != nil {
-		m.Fatal(err)
+		m.Error(err)
+		os.Exit(1)
 	}
 
 	var mi win.MONITORINFO
@@ -248,7 +250,7 @@ func main() {
 			Height: HEIGHT,
 		})
 		if err != nil {
-			m.Error(err)
+			m.Error(NewError(err))
 		}
 	}
 
