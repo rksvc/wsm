@@ -4,8 +4,6 @@ package main
 
 import (
 	"os"
-	"strconv"
-	"strings"
 	"syscall"
 	"unsafe"
 
@@ -267,15 +265,7 @@ func elevate() error {
 	if err != nil {
 		return err
 	}
-	var args []string
-	for _, arg := range os.Args[1:] {
-		if strings.ContainsRune(arg, ' ') {
-			args = append(args, strconv.Quote(arg))
-		} else {
-			args = append(args, arg)
-		}
-	}
-	argsPtr, err := syscall.UTF16PtrFromString(strings.Join(args, " "))
+	argsPtr, err := syscall.UTF16PtrFromString(Join(os.Args[1:]...))
 	if err != nil {
 		return err
 	}

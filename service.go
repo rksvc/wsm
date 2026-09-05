@@ -110,7 +110,11 @@ func (h *Handler) command(ctx context.Context, c *Config) (*exec.Cmd, windows.Ha
 		return nil, 0, err
 	}
 
-	cmd := exec.CommandContext(ctx, c.Exe, c.Flags...)
+	flags, err := windows.DecomposeCommandLine(c.Flags)
+	if err != nil {
+		return nil, 0, err
+	}
+	cmd := exec.CommandContext(ctx, c.Exe, flags...)
 	cmd.Dir = c.Dir
 	cmd.Env = c.Env
 	if c.Stdin != "" {

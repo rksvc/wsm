@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -24,4 +25,16 @@ func SplitNewline(s string) (r []string) {
 		}
 	}
 	return
+}
+
+func Join(ss ...string) string {
+	slice := make([]string, len(ss))
+	for i, s := range ss {
+		if strings.ContainsRune(s, ' ') {
+			slice[i] = strconv.Quote(s)
+		} else {
+			slice[i] = s
+		}
+	}
+	return strings.Join(slice, " ")
 }

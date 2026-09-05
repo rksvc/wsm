@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kballard/go-shellquote"
 	"github.com/lxn/walk"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
@@ -49,8 +48,7 @@ var StartTypeMap = map[string]uint32{
 
 type ServiceConfig struct {
 	Config
-	Flags string
-	Env   string
+	Env string
 
 	Name         string
 	Dependencies string
@@ -200,12 +198,11 @@ func (m *Model) tableCurrentIndexChanged() {
 		}
 		config, err := GetConfig(srv.Name)
 		if err != nil {
-			m.Error(NewError(err))
+			m.Error(err)
 			return
 		}
 		m.srv = ServiceConfig{
 			Config: *config,
-			Flags:  shellquote.Join(config.Flags...),
 			Env:    strings.Join(config.Env, "\r\n"),
 
 			Name:         srv.Name,
@@ -301,11 +298,6 @@ func (m *Model) buttonSaveClick() {
 		m.Error(errors.New("Invalid startup type."))
 		return
 	}
-	m.srv.Config.Flags, err = shellquote.Split(m.srv.Flags)
-	if err != nil {
-		m.Error(NewError(err))
-		return
-	}
 	m.srv.Config.Env = SplitNewline(m.srv.Env)
 
 	index := m.tv.CurrentIndex()
@@ -323,7 +315,7 @@ func (m *Model) buttonSaveClick() {
 		}
 		if err := SetConfig(m.srv.Name, m.srv.Config); err != nil {
 			srv.Delete()
-			m.Error(NewError(err))
+			m.Error(err)
 			return
 		}
 
@@ -388,7 +380,7 @@ func (m *Model) buttonSaveClick() {
 		}
 
 		if err := SetConfig(m.srv.Name, m.srv.Config); err != nil {
-			m.Error(NewError(err))
+			m.Error(err)
 			return
 		}
 
