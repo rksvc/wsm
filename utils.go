@@ -18,7 +18,7 @@ func NewError(err error) error {
 	return err
 }
 
-func SplitNewline(s string) (r []string) {
+func SplitLines(s string) (r []string) {
 	for s := range strings.FieldsFuncSeq(s, func(r rune) bool { return r == '\r' || r == '\n' }) {
 		if s != "" {
 			r = append(r, s)

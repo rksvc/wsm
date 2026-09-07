@@ -298,14 +298,14 @@ func (m *Model) buttonSaveClick() {
 		m.Error(errors.New("Invalid startup type."))
 		return
 	}
-	m.srv.Config.Env = SplitNewline(m.srv.Env)
+	m.srv.Config.Env = SplitLines(m.srv.Env)
 
 	index := m.tv.CurrentIndex()
 	if index == -1 {
 		delayed := m.srv.StartType == AUTO_START_DELAYED
 		srv, err := m.mgr.CreateService(m.srv.Name, Exe, mgr.Config{
 			StartType:        startType,
-			Dependencies:     SplitNewline(m.srv.Dependencies),
+			Dependencies:     SplitLines(m.srv.Dependencies),
 			Description:      m.srv.Description,
 			DelayedAutoStart: delayed,
 		})
@@ -344,7 +344,7 @@ func (m *Model) buttonSaveClick() {
 		}
 	} else {
 		srv := m.table.services[index].srv
-		deps := SplitNewline(m.srv.Dependencies)
+		deps := SplitLines(m.srv.Dependencies)
 		delayed := m.srv.StartType == AUTO_START_DELAYED
 		err = srv.UpdateConfig(mgr.Config{
 			ServiceType:      windows.SERVICE_NO_CHANGE,
