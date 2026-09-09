@@ -88,7 +88,6 @@ type Model struct {
 	mw *walk.MainWindow
 	tv *walk.TableView
 	db *walk.DataBinder
-	cb *walk.ComboBox
 
 	start, restart                  *walk.PushButton
 	exe, dir, stdin, stdout, stderr *walk.LineEdit
