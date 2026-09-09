@@ -90,6 +90,7 @@ type Model struct {
 	db *walk.DataBinder
 	cb *walk.ComboBox
 
+	start, restart                  *walk.PushButton
 	exe, dir, stdin, stdout, stderr *walk.LineEdit
 }
 
@@ -160,6 +161,38 @@ func NewModel() (*Model, error) {
 	return m, nil
 }
 
+func (m *Model) setButtons(index int) {
+	action := "Start"
+	if index != -1 {
+		switch svc.State(m.table.services[index].Status) {
+		case svc.StartPending, svc.Running, svc.ContinuePending:
+			action = "Stop"
+		}
+	}
+	if err := m.start.SetText(action); err != nil {
+		m.Error(NewError(err))
+		return
+	}
+
+	var enabled bool
+	if index != -1 {
+		switch svc.State(m.table.services[index].Status) {
+		case svc.Stopped, svc.Running, svc.Paused:
+			enabled = true
+		}
+	}
+	m.start.SetEnabled(enabled)
+
+	enabled = false
+	if index != -1 {
+		switch svc.State(m.table.services[index].Status) {
+		case svc.Running, svc.Paused:
+			enabled = true
+		}
+	}
+	m.restart.SetEnabled(enabled)
+}
+
 func (m *Model) newServiceChangeNotificationCallback(name string, srv *mgr.Service) uintptr {
 	return windows.NewCallback(func(notify uint32, context uintptr) uintptr {
 		status, err := srv.Query()
@@ -176,10 +209,8 @@ func (m *Model) newServiceChangeNotificationCallback(name string, srv *mgr.Servi
 
 		m.table.services[index].Status = Status(status.State)
 		m.table.PublishRowChanged(index)
-		if m.tv != nil {
-			if err := m.tv.SetCurrentIndex(m.tv.CurrentIndex()); err != nil {
-				m.Error(NewError(err))
-			}
+		if m.tv != nil && m.tv.CurrentIndex() == index {
+			m.setButtons(index)
 		}
 		return 0
 	})
@@ -187,6 +218,7 @@ func (m *Model) newServiceChangeNotificationCallback(name string, srv *mgr.Servi
 
 func (m *Model) tableCurrentIndexChanged() {
 	index := m.tv.CurrentIndex()
+	m.setButtons(index)
 	if index == -1 {
 		m.srv = NewServiceConfig()
 	} else {

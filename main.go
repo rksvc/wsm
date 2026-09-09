@@ -105,51 +105,16 @@ func main() {
 										OnClicked: m.buttonNewServiceClick,
 									},
 									PushButton{
-										Text:      Bind("action(tv.CurrentIndex)"),
-										Enabled:   Bind("action_enabled(tv.CurrentIndex)"),
+										Text:      "Start",
+										Enabled:   false,
+										AssignTo:  &m.start,
 										OnClicked: m.actionClick,
 									},
 									PushButton{
 										Text:      "Restart",
-										Enabled:   Bind("restart_enabled(tv.CurrentIndex)"),
+										Enabled:   false,
+										AssignTo:  &m.restart,
 										OnClicked: m.buttonRestartClick,
-									},
-								},
-								Functions: map[string]func(args ...any) (any, error){
-									"action": func(args ...any) (any, error) {
-										index := int(args[0].(float64))
-										if index == -1 {
-											return "Start", nil
-										}
-										switch svc.State(m.table.services[index].Status) {
-										case svc.Stopped, svc.StopPending, svc.PausePending, svc.Paused:
-											return "Start", nil
-										case svc.StartPending, svc.Running, svc.ContinuePending:
-											return "Stop", nil
-										}
-										return "", nil
-									},
-									"action_enabled": func(args ...any) (any, error) {
-										index := int(args[0].(float64))
-										if index == -1 {
-											return false, nil
-										}
-										switch svc.State(m.table.services[index].Status) {
-										case svc.Stopped, svc.Running, svc.Paused:
-											return true, nil
-										}
-										return false, nil
-									},
-									"restart_enabled": func(args ...any) (any, error) {
-										index := int(args[0].(float64))
-										if index == -1 {
-											return false, nil
-										}
-										switch svc.State(m.table.services[index].Status) {
-										case svc.Running, svc.Paused:
-											return true, nil
-										}
-										return false, nil
 									},
 								},
 							},
