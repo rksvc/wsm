@@ -5,11 +5,9 @@ package main
 import (
 	"os"
 	"syscall"
-	"unsafe"
 
-	"github.com/lxn/walk"
-	. "github.com/lxn/walk/declarative"
-	"github.com/lxn/win"
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/eventlog"
@@ -49,176 +47,32 @@ func main() {
 		return
 	}
 
-	m, err := NewModel()
+	app, err := NewApp()
 	if err != nil {
-		m.Error(err)
-		os.Exit(1)
+		mygo.Dialog.Error("", NewError(err).Error())
+		return
 	}
-
-	window := MainWindow{
-		Title:    "Windows Service Manager",
-		AssignTo: &m.mw,
-		Layout:   VBox{Spacing: 3},
-		Children: []Widget{
-			Label{Text: "Services"},
-			Composite{
-				Layout: HBox{MarginsZero: true},
-				Children: []Widget{
-					VSplitter{
-						StretchFactor: 3,
-						Children: []Widget{
-							TableView{
-								Name:     "tv",
-								AssignTo: &m.tv,
-								Model:    m.table,
-								Columns: []TableViewColumn{
-									{Title: "Name", DataMember: "Name"},
-									{Title: "Startup type", DataMember: "StartType"},
-									{Title: "Status", DataMember: "Status"},
-									{Title: "Description", DataMember: "Description"},
-								},
-								StyleCell: func(style *walk.CellStyle) {
-									if style.Col() == 2 {
-										// https://astryx.atmeta.com/components/Badge?tab=properties
-										switch svc.State(m.table.services[style.Row()].Status) {
-										case svc.Stopped:
-											style.TextColor = walk.RGB(137, 0, 26)
-										case svc.StartPending, svc.ContinuePending:
-											style.TextColor = walk.RGB(0, 69, 140)
-										case svc.StopPending, svc.PausePending:
-											style.TextColor = walk.RGB(110, 53, 0)
-										case svc.Running:
-											style.TextColor = walk.RGB(12, 87, 0)
-										case svc.Paused:
-											style.TextColor = walk.RGB(0, 83, 72)
-										}
-									}
-								},
-								OnCurrentIndexChanged: m.tableCurrentIndexChanged,
-							},
-							Composite{
-								Layout: HBox{MarginsZero: true},
-								Children: []Widget{
-									PushButton{
-										Text:      "New",
-										Enabled:   Bind("tv.CurrentIndex != -1"),
-										OnClicked: m.buttonNewServiceClick,
-									},
-									PushButton{
-										Text:      "Start",
-										Enabled:   false,
-										AssignTo:  &m.start,
-										OnClicked: m.actionClick,
-									},
-									PushButton{
-										Text:      "Restart",
-										Enabled:   false,
-										AssignTo:  &m.restart,
-										OnClicked: m.buttonRestartClick,
-									},
-								},
-							},
-						},
-					},
-					ScrollView{
-						StretchFactor: 7,
-						Layout:        VBox{Margins: Margins{Right: 20}},
-						DataBinder:    DataBinder{AssignTo: &m.db, DataSource: &m.srv},
-						Children: []Widget{
-							GroupBox{
-								Title:  "Config",
-								Layout: Grid{Columns: 3},
-								Children: []Widget{
-									Label{Text: "Name (required)"},
-									LineEdit{ColumnSpan: 2, Text: Bind("Name"), ReadOnly: Bind("tv.CurrentIndex != -1")},
-									Label{Text: "Path (required)"},
-									LineEdit{Text: Bind("Exe"), AssignTo: &m.exe},
-									PushButton{Text: "Choose", OnClicked: m.chooseFileFor(&m.exe, false)},
-									Label{Text: "Startup directory"},
-									LineEdit{Text: Bind("Dir"), AssignTo: &m.dir},
-									PushButton{Text: "Choose", OnClicked: m.chooseFileFor(&m.dir, true)},
-									Label{Text: "Arguments"},
-									LineEdit{ColumnSpan: 2, Text: Bind("Flags")},
-									Label{Text: "Description"},
-									LineEdit{ColumnSpan: 2, Text: Bind("Description")},
-									Label{Text: "Input (stdin)"},
-									LineEdit{Text: Bind("Stdin"), AssignTo: &m.stdin},
-									PushButton{Text: "Choose", OnClicked: m.chooseFileFor(&m.stdin, false)},
-									Label{Text: "Output (stdout)"},
-									LineEdit{Text: Bind("Stdout"), AssignTo: &m.stdout},
-									PushButton{Text: "Choose", OnClicked: m.chooseFileFor(&m.stdout, false)},
-									Label{Text: "Error (stderr)"},
-									LineEdit{Text: Bind("Stderr"), AssignTo: &m.stderr},
-									PushButton{Text: "Choose", OnClicked: m.chooseFileFor(&m.stderr, false)},
-									Label{Text: "Startup type"},
-									ComboBox{
-										ColumnSpan: 2,
-										Value:      Bind("StartType"),
-										Model:      []string{AUTO_START, AUTO_START_DELAYED, MANUAL, DISABLED},
-									},
-								},
-							},
-							GroupBox{
-								Title:  "Environment variables",
-								Layout: VBox{},
-								Children: []Widget{TextEdit{
-									Text:    Bind("Env"),
-									VScroll: true,
-									MinSize: Size{Height: 70},
-								}},
-							},
-							GroupBox{
-								Title:  "Dependencies",
-								Layout: VBox{},
-								Children: []Widget{TextEdit{
-									Text:    Bind("Dependencies"),
-									VScroll: true,
-									MinSize: Size{Height: 70},
-								}},
-							},
-							Composite{
-								Layout: HBox{MarginsZero: true, Spacing: 3},
-								Children: []Widget{
-									PushButton{
-										Text:      "Remove",
-										OnClicked: m.buttonRemoveClick,
-										Enabled:   Bind("tv.CurrentIndex != -1"),
-									},
-									PushButton{
-										Text:      "Save",
-										OnClicked: m.buttonSaveClick,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
+	mygo.App.WhenReady(func() {
+		app.win.Store(mygo.NewWindow(mygo.WindowOptions{
+			Title:   "Windows Service Manager",
+			Content: ui.View(app.view),
+		}))
+	})
+	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
+		{Label: "New", Click: func(item *mygo.MenuItem, win *mygo.Window) {
+			win.Update(func() {
+				app.form = ServiceConfig{StartType: AUTO_START}
+				app.editing = true
+				app.new = true
+			})
+		}},
+		{Label: "Quit", Click: func(item *mygo.MenuItem, win *mygo.Window) {
+			mygo.App.Quit()
+		}},
+	}))
+	if err := mygo.App.Run(); err != nil {
+		mygo.Dialog.Error("", NewError(err).Error())
 	}
-	if err := window.Create(); err != nil {
-		m.Error(err)
-		os.Exit(1)
-	}
-
-	var mi win.MONITORINFO
-	mi.CbSize = uint32(unsafe.Sizeof(mi))
-	hMon := win.MonitorFromWindow(m.mw.Handle(), win.MONITOR_DEFAULTTOPRIMARY)
-	if win.GetMonitorInfo(hMon, &mi) {
-		work := mi.RcWork
-		const WIDTH, HEIGHT = 1300, 800
-		err := m.mw.SetBoundsPixels(walk.Rectangle{
-			X:      int(work.Left) + (int(work.Right-work.Left)-WIDTH)/2,
-			Y:      int(work.Top) + (int(work.Bottom-work.Top)-HEIGHT)/2,
-			Width:  WIDTH,
-			Height: HEIGHT,
-		})
-		if err != nil {
-			m.Error(NewError(err))
-		}
-	}
-
-	m.mw.Run()
 }
 
 func elevate() error {

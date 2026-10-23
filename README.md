@@ -3,6 +3,9 @@
 ## Build
 
 ```sh
-rsrc -manifest wsm.manifest -o rsrc.syso
 go build -ldflags='-s -w -H windowsgui' -trimpath
 ```
+
+## Credits
+
+- [Lucide](https://lucide.dev) for icons.

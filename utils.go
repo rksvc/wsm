@@ -19,7 +19,7 @@ func NewError(err error) error {
 }
 
 func SplitLines(s string) (r []string) {
-	for s := range strings.FieldsFuncSeq(s, func(r rune) bool { return r == '\r' || r == '\n' }) {
+	for s := range strings.FieldsFuncSeq(s, func(r rune) bool { return r == '\n' }) {
 		if s != "" {
 			r = append(r, s)
 		}
