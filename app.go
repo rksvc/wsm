@@ -335,7 +335,7 @@ func (a *App) view(c *ui.Context) {
 	ui.Modal(c, &a.editing, func() {
 		ui.Scroll(c).PaddingEnd(20).Children(func() {
 			ui.Form(c, func() {
-				ui.Field(c, "Name", func() { ui.TextInput(c, &a.form.Name) }).Disabled(!a.new)
+				ui.Field(c, "Name", func() { ui.TextInput(c, &a.form.Name).ReadOnly(!a.new) })
 				ui.Field(c, "Path", func() {
 					ui.Row(c).Gap(6).Children(func() {
 						ui.TextInput(c, &a.form.Exe).Grow(1)
