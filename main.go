@@ -54,8 +54,10 @@ func main() {
 	}
 	mygo.App.WhenReady(func() {
 		app.win.Store(mygo.NewWindow(mygo.WindowOptions{
-			Title:   "Windows Service Manager",
-			Content: ui.View(app.view),
+			Title:     "Windows Service Manager",
+			MinWidth:  800,
+			MinHeight: 600,
+			Content:   ui.View(app.view),
 		}))
 	})
 	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
