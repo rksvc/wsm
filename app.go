@@ -332,6 +332,7 @@ func (a *App) view(c *ui.Context) {
 		})
 	})
 
+	t.Spacing = 3
 	ui.Modal(c, &a.editing, func() {
 		ui.Scroll(c).PaddingEnd(20).Children(func() {
 			ui.Form(c, func() {
@@ -397,7 +398,7 @@ func (a *App) view(c *ui.Context) {
 				}
 			}
 		})
-	})
+	}).FontSize(13)
 
 	if ui.AlertDialog(c, &a.asking, "Delete "+a.form.Name+"?", "You can't undo this.", "Cancel", "Delete") == 1 {
 		i := slices.IndexFunc(a.srvs, func(s *Service) bool { return s.Name == a.form.Name })
