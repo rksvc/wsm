@@ -242,91 +242,112 @@ func (a *App) view(c *ui.Context) {
 						}
 					})
 
-					running := false
-					tooltip := "Start"
-					switch svc.State(srv.Status) {
-					case svc.StartPending, svc.Running, svc.ContinuePending:
-						running = true
-						tooltip = "Stop"
-					}
-					disabled := true
-					switch svc.State(srv.Status) {
-					case svc.Stopped, svc.Running, svc.Paused:
-						disabled = false
-					}
-					if ui.Button(c, "").Tooltip(tooltip).Disabled(disabled).Children(func() {
-						if running {
-							ui.Icon(c, stop)
+					ui.Row(c).Children(func() {
+						running := false
+						tooltip := "Start"
+						switch svc.State(srv.Status) {
+						case svc.StartPending, svc.Running, svc.ContinuePending:
+							running = true
+							tooltip = "Stop"
+						}
+						disabled := true
+						switch svc.State(srv.Status) {
+						case svc.Stopped, svc.Running, svc.Paused:
+							disabled = false
+						}
+						b := ui.Button(c, "")
+						if c.Direction() == ui.LeftToRight {
+							b.Radius(t.Radius, 0, 0, t.Radius)
 						} else {
-							ui.Icon(c, start)
+							b.Radius(0, t.Radius, t.Radius, 0)
 						}
-					}).Clicked() {
-						var err error
-						if srv.Status == Status(svc.Running) {
-							_, err = srv.srv.Control(svc.Stop)
-						} else {
-							err = srv.srv.Start()
+						if disabled {
+							b.Background(t.Surface.Alpha(0.5)).TextColor(t.Text.Alpha(0.5))
 						}
-						if err != nil {
-							mygo.Dialog.Error("", NewError(err).Error())
-						}
-					}
-
-					disabled = true
-					switch svc.State(srv.Status) {
-					case svc.Running, svc.Paused:
-						disabled = false
-					}
-					if ui.Button(c, "").Tooltip("Restart").Disabled(disabled).Children(func() {
-						ui.Icon(c, restart)
-					}).Clicked() {
-						go func() {
-							status, err := srv.srv.Control(svc.Stop)
+						if b.BorderEndWidth(0).Tooltip(tooltip).Disabled(disabled).DimDisabled(false).Children(func() {
+							if running {
+								ui.Icon(c, stop)
+							} else {
+								ui.Icon(c, start)
+							}
+						}).Clicked() {
+							var err error
+							if srv.Status == Status(svc.Running) {
+								_, err = srv.srv.Control(svc.Stop)
+							} else {
+								err = srv.srv.Start()
+							}
 							if err != nil {
 								mygo.Dialog.Error("", NewError(err).Error())
-								return
 							}
-							startTime := time.Now()
-							for status.State != windows.SERVICE_STOPPED {
-								if time.Since(startTime) > 30*time.Second {
-									mygo.Dialog.Error("", "Service stop timed out.")
-									return
-								}
-								time.Sleep(time.Duration(status.WaitHint) * time.Millisecond)
-								status, err = srv.srv.Query()
+						}
+
+						disabled = true
+						switch svc.State(srv.Status) {
+						case svc.Running, svc.Paused:
+							disabled = false
+						}
+						b = ui.Button(c, "")
+						if disabled {
+							b.Background(t.Surface.Alpha(0.5)).TextColor(t.Text.Alpha(0.5))
+						}
+						if b.Radius(0).Tooltip("Restart").Disabled(disabled).DimDisabled(false).Children(func() {
+							ui.Icon(c, restart)
+						}).Clicked() {
+							go func() {
+								status, err := srv.srv.Control(svc.Stop)
 								if err != nil {
 									mygo.Dialog.Error("", NewError(err).Error())
 									return
 								}
-							}
-							if err = srv.srv.Start(); err != nil {
-								mygo.Dialog.Error("", NewError(err).Error())
-							}
-						}()
-					}
-
-					if ui.Button(c, "").Tooltip("Edit").Children(func() {
-						ui.Icon(c, edit)
-					}).Clicked() {
-						if cfg, err := srv.srv.Config(); err != nil {
-							mygo.Dialog.Error("", NewError(err).Error())
-						} else if config, err := GetConfig(srv.Name); err != nil {
-							mygo.Dialog.Error("", NewError(err).Error())
-						} else {
-							a.form = ServiceConfig{
-								Config: *config,
-								Env:    strings.Join(config.Env, "\n"),
-
-								Name:         srv.Name,
-								Dependencies: strings.Join(cfg.Dependencies, "\n"),
-								Description:  cfg.Description,
-								StartType:    getStartType(cfg.StartType, cfg.DelayedAutoStart),
-							}
-
-							a.editing = true
-							a.new = false
+								startTime := time.Now()
+								for status.State != windows.SERVICE_STOPPED {
+									if time.Since(startTime) > 30*time.Second {
+										mygo.Dialog.Error("", "Service stop timed out.")
+										return
+									}
+									time.Sleep(time.Duration(status.WaitHint) * time.Millisecond)
+									status, err = srv.srv.Query()
+									if err != nil {
+										mygo.Dialog.Error("", NewError(err).Error())
+										return
+									}
+								}
+								if err = srv.srv.Start(); err != nil {
+									mygo.Dialog.Error("", NewError(err).Error())
+								}
+							}()
 						}
-					}
+
+						b = ui.Button(c, "")
+						if c.Direction() == ui.LeftToRight {
+							b.Radius(0, t.Radius, t.Radius, 0)
+						} else {
+							b.Radius(t.Radius, 0, 0, t.Radius)
+						}
+						if b.BorderStartWidth(0).Tooltip("Edit").Children(func() {
+							ui.Icon(c, edit)
+						}).Clicked() {
+							if cfg, err := srv.srv.Config(); err != nil {
+								mygo.Dialog.Error("", NewError(err).Error())
+							} else if config, err := GetConfig(srv.Name); err != nil {
+								mygo.Dialog.Error("", NewError(err).Error())
+							} else {
+								a.form = ServiceConfig{
+									Config: *config,
+									Env:    strings.Join(config.Env, "\n"),
+
+									Name:         srv.Name,
+									Dependencies: strings.Join(cfg.Dependencies, "\n"),
+									Description:  cfg.Description,
+									StartType:    getStartType(cfg.StartType, cfg.DelayedAutoStart),
+								}
+
+								a.editing = true
+								a.new = false
+							}
+						}
+					})
 				})
 			}
 		})
