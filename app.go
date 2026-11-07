@@ -94,7 +94,9 @@ type App struct {
 	srvs []*Service
 	form ServiceConfig
 
-	editing, new, asking bool
+	editing, new, asking, err bool
+	message                   string
+	errs                      chan error
 }
 
 func NewApp() (*App, error) {
@@ -102,7 +104,7 @@ func NewApp() (*App, error) {
 	if err != nil {
 		return nil, NewError(err)
 	}
-	a := &App{mgr: mgr}
+	a := &App{mgr: mgr, errs: make(chan error)}
 
 	srvs, err := mgr.ListServices()
 	if err != nil {
@@ -164,7 +166,7 @@ func (a *App) newServiceChangeNotificationCallback(name string, srv *mgr.Service
 	return windows.NewCallback(func(notify uint32, context uintptr) uintptr {
 		status, err := srv.Query()
 		if err != nil {
-			mygo.Dialog.Error("", NewError(err).Error())
+			a.errs <- NewError(err)
 			return 0
 		}
 		update := func() {
@@ -278,7 +280,7 @@ func (a *App) view(c *ui.Context) {
 								err = srv.srv.Start()
 							}
 							if err != nil {
-								mygo.Dialog.Error("", NewError(err).Error())
+								a.err, a.message = true, NewError(err).Error()
 							}
 						}
 
@@ -297,24 +299,24 @@ func (a *App) view(c *ui.Context) {
 							go func() {
 								status, err := srv.srv.Control(svc.Stop)
 								if err != nil {
-									mygo.Dialog.Error("", NewError(err).Error())
+									a.errs <- NewError(err)
 									return
 								}
 								startTime := time.Now()
 								for status.State != windows.SERVICE_STOPPED {
 									if time.Since(startTime) > 30*time.Second {
-										mygo.Dialog.Error("", "Service stop timed out.")
+										a.errs <- errors.New("Service stop timed out.")
 										return
 									}
 									time.Sleep(time.Duration(status.WaitHint) * time.Millisecond)
 									status, err = srv.srv.Query()
 									if err != nil {
-										mygo.Dialog.Error("", NewError(err).Error())
+										a.errs <- NewError(err)
 										return
 									}
 								}
 								if err = srv.srv.Start(); err != nil {
-									mygo.Dialog.Error("", NewError(err).Error())
+									a.errs <- NewError(err)
 								}
 							}()
 						}
@@ -329,9 +331,9 @@ func (a *App) view(c *ui.Context) {
 							ui.Icon(c, edit)
 						}).Clicked() {
 							if cfg, err := srv.srv.Config(); err != nil {
-								mygo.Dialog.Error("", NewError(err).Error())
+								a.err, a.message = true, NewError(err).Error()
 							} else if config, err := GetConfig(srv.Name); err != nil {
-								mygo.Dialog.Error("", NewError(err).Error())
+								a.err, a.message = true, NewError(err).Error()
 							} else {
 								a.form = ServiceConfig{
 									Config: *config,
@@ -411,9 +413,9 @@ func (a *App) view(c *ui.Context) {
 			}
 			if ui.PrimaryButton(c, "Save").Clicked() {
 				if a.form.Name == "" {
-					mygo.Dialog.Error("", "Name is required.")
+					a.err, a.message = true, "Name is required."
 				} else if a.form.Exe == "" {
-					mygo.Dialog.Error("", "Path is required.")
+					a.err, a.message = true, "Path is required."
 				} else {
 					a.editing = !a.save()
 				}
@@ -434,9 +436,9 @@ func (a *App) view(c *ui.Context) {
 				srv := a.srvs[i]
 				err := windows.UnsubscribeServiceChangeNotifications(srv.subscription)
 				if err != nil {
-					mygo.Dialog.Error("", NewError(err).Error())
+					a.err, a.message = true, NewError(err).Error()
 				} else if err := srv.srv.Delete(); err != nil {
-					mygo.Dialog.Error("", NewError(err).Error())
+					a.err, a.message = true, NewError(err).Error()
 				} else {
 					srv.srv.Close()
 					a.srvs = slices.Delete(a.srvs, i, i+1)
@@ -445,6 +447,15 @@ func (a *App) view(c *ui.Context) {
 			}
 		})
 	}).Width(t.Space(75))
+
+	if !a.err {
+		select {
+		case err := <-a.errs:
+			a.err, a.message = true, err.Error()
+		default:
+		}
+	}
+	ui.AlertDialog(c, &a.err, "Error", a.message, "OK")
 }
 
 func (a *App) save() bool {
@@ -463,12 +474,12 @@ func (a *App) save() bool {
 			DelayedAutoStart: delayed,
 		})
 		if err != nil {
-			mygo.Dialog.Error("", NewError(err).Error())
+			a.err, a.message = true, NewError(err).Error()
 			return false
 		}
 		if err := SetConfig(a.form.Name, a.form.Config); err != nil {
 			srv.Delete()
-			mygo.Dialog.Error("", NewError(err).Error())
+			a.err, a.message = true, NewError(err).Error()
 			return false
 		}
 
@@ -477,7 +488,7 @@ func (a *App) save() bool {
 		err = windows.SubscribeServiceChangeNotifications(srv.Handle, windows.SC_EVENT_STATUS_CHANGE, callback, 0, &subscription)
 		if err != nil {
 			srv.Delete()
-			mygo.Dialog.Error("", NewError(err).Error())
+			a.err, a.message = true, NewError(err).Error()
 			return false
 		}
 
@@ -503,7 +514,7 @@ func (a *App) save() bool {
 			DelayedAutoStart: delayed,
 		})
 		if err != nil {
-			mygo.Dialog.Error("", NewError(err).Error())
+			a.err, a.message = true, NewError(err).Error()
 			return false
 		}
 		if len(deps) == 0 {
@@ -522,13 +533,13 @@ func (a *App) save() bool {
 				nil,
 			)
 			if err != nil {
-				mygo.Dialog.Error("", NewError(err).Error())
+				a.err, a.message = true, NewError(err).Error()
 				return false
 			}
 		}
 
 		if err := SetConfig(a.form.Name, a.form.Config); err != nil {
-			mygo.Dialog.Error("", NewError(err).Error())
+			a.err, a.message = true, NewError(err).Error()
 			return false
 		}
 
@@ -545,7 +556,7 @@ func (a *App) selectFileButton(c *ui.Context, value *string, dir bool) {
 			Directory: dir,
 		})
 		if err != nil {
-			mygo.Dialog.Error("", NewError(err).Error())
+			a.err, a.message = true, NewError(err).Error()
 			return
 		}
 		if len(paths) > 0 {
