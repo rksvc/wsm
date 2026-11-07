@@ -385,7 +385,7 @@ func (a *App) view(c *ui.Context) {
 			if ui.Button(c, "Cancel").Clicked() {
 				a.editing = false
 			}
-			if !a.new && ui.Button(c, "Delete").Background(t.Danger).TextColor(ui.RGB(255, 255, 255)).Clicked() {
+			if !a.new && destructiveButton(c, "Delete").Clicked() {
 				a.asking = true
 			}
 			if ui.PrimaryButton(c, "Save").Clicked() {
@@ -400,20 +400,30 @@ func (a *App) view(c *ui.Context) {
 		})
 	}).FontSize(13)
 
-	if ui.AlertDialog(c, &a.asking, "Delete "+a.form.Name+"?", "You can't undo this.", "Cancel", "Delete") == 1 {
-		i := slices.IndexFunc(a.srvs, func(s *Service) bool { return s.Name == a.form.Name })
-		srv := a.srvs[i]
-		err := windows.UnsubscribeServiceChangeNotifications(srv.subscription)
-		if err != nil {
-			mygo.Dialog.Error("", NewError(err).Error())
-		} else if err := srv.srv.Delete(); err != nil {
-			mygo.Dialog.Error("", NewError(err).Error())
-		} else {
-			srv.srv.Close()
-			a.srvs = slices.Delete(a.srvs, i, i+1)
-			a.editing = false
-		}
-	}
+	ui.Modal(c, &a.asking, func() {
+		ui.Text(c, "Delete "+a.form.Name+"?").Bold().FontSize(t.FontSize + 1)
+		ui.Text(c, "You can't undo this.").TextColor(t.TextMuted)
+		ui.Row(c).Gap(8).Justify(ui.End).Margin(t.Space(2), 0, 0, 0).Children(func() {
+			if ui.Button(c, "Cancel").Clicked() {
+				a.asking = false
+			}
+			if destructiveButton(c, "Delete").Clicked() {
+				a.asking = false
+				i := slices.IndexFunc(a.srvs, func(s *Service) bool { return s.Name == a.form.Name })
+				srv := a.srvs[i]
+				err := windows.UnsubscribeServiceChangeNotifications(srv.subscription)
+				if err != nil {
+					mygo.Dialog.Error("", NewError(err).Error())
+				} else if err := srv.srv.Delete(); err != nil {
+					mygo.Dialog.Error("", NewError(err).Error())
+				} else {
+					srv.srv.Close()
+					a.srvs = slices.Delete(a.srvs, i, i+1)
+					a.editing = false
+				}
+			}
+		})
+	}).Width(t.Space(75))
 }
 
 func (a *App) save() bool {
@@ -521,6 +531,29 @@ func (a *App) selectFileButton(c *ui.Context, value *string, dir bool) {
 			*value = paths[0]
 		}
 	}
+}
+
+func destructiveButton(c *ui.Context, label string) ui.Element {
+	t := c.Theme()
+	b := ui.Button(c, label)
+	if b.Pressed() {
+		if t.Dark {
+			// https://yeun.github.io/open-color/
+			b.Background(ui.RGB(224, 49, 49))
+		} else {
+			// https://primer.style/product/components/button/#style-variants
+			b.Background(ui.RGB(164, 14, 38))
+		}
+	} else if b.Hovered() {
+		if t.Dark {
+			b.Background(ui.RGB(250, 82, 82))
+		} else {
+			b.Background(ui.RGB(207, 34, 46))
+		}
+	} else {
+		b.Background(t.Danger)
+	}
+	return b.TextColor(t.AccentText).BorderWidth(0)
 }
 
 func getStartType(startType uint32, delayedAutoStart bool) string {
