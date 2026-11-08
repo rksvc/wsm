@@ -19,6 +19,9 @@ import (
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
+//go:embed icons/circle-x.svg
+var circleSVG []byte
+
 //go:embed icons/start.svg
 var startSVG []byte
 
@@ -32,6 +35,7 @@ var restartSVG []byte
 var editSVG []byte
 
 var (
+	circle  = ui.MustParseSVG(circleSVG)
 	start   = ui.MustParseSVG(startSVG)
 	stop    = ui.MustParseSVG(stopSVG)
 	restart = ui.MustParseSVG(restartSVG)
@@ -187,173 +191,180 @@ func (a *App) newServiceChangeNotificationCallback(name string, srv *mgr.Service
 func (a *App) view(c *ui.Context) {
 	t := c.Theme()
 
-	ui.Scroll(c).Children(func() {
-		ui.Column(c).Padding(16).Gap(8).Children(func() {
-			for _, srv := range a.srvs {
-				ui.Row(c).Gap(8).Children(func() {
-					ui.Column(c).Grow(1).Children(func() {
-						ui.Row(c).Gap(4).Children(func() {
-							ui.Text(c, srv.Name)
+	if len(a.srvs) > 0 {
+		ui.Scroll(c).Children(func() {
+			ui.Column(c).Padding(16).Gap(8).Children(func() {
+				for _, srv := range a.srvs {
+					ui.Row(c).Gap(8).Children(func() {
+						ui.Column(c).Grow(1).Children(func() {
+							ui.Row(c).Gap(4).Children(func() {
+								ui.Text(c, srv.Name)
 
-							var startType string
-							switch srv.StartType {
-							case AUTO_START:
-								startType = "AutoStart"
-							case AUTO_START_DELAYED:
-								startType = "AutoStartDelayed"
-							case MANUAL:
-								startType = "Manual"
-							case DISABLED:
-								startType = "Disabled"
-							}
-							ui.Badge(c, startType)
+								var startType string
+								switch srv.StartType {
+								case AUTO_START:
+									startType = "AutoStart"
+								case AUTO_START_DELAYED:
+									startType = "AutoStartDelayed"
+								case MANUAL:
+									startType = "Manual"
+								case DISABLED:
+									startType = "Disabled"
+								}
+								ui.Badge(c, startType)
 
-							b := ui.Badge(c, srv.Status.String())
-							// https://astryx.atmeta.com/components/Badge?tab=properties
-							switch svc.State(srv.Status) {
-							case svc.Stopped: // red
-								if t.Dark {
-									b.Background(ui.RGB(91, 43, 40)).TextColor(ui.RGB(255, 174, 167))
-								} else {
-									b.Background(ui.RGB(255, 196, 190)).TextColor(ui.RGB(118, 0, 12))
+								b := ui.Badge(c, srv.Status.String())
+								// https://astryx.atmeta.com/components/Badge?tab=properties
+								switch svc.State(srv.Status) {
+								case svc.Stopped: // red
+									if t.Dark {
+										b.Background(ui.RGB(91, 43, 40)).TextColor(ui.RGB(255, 174, 167))
+									} else {
+										b.Background(ui.RGB(255, 196, 190)).TextColor(ui.RGB(118, 0, 12))
+									}
+								case svc.StartPending, svc.ContinuePending: // blue
+									if t.Dark {
+										b.Background(ui.RGB(37, 60, 90)).TextColor(ui.RGB(161, 202, 255))
+									} else {
+										b.Background(ui.RGB(185, 215, 255)).TextColor(ui.RGB(0, 57, 120))
+									}
+								case svc.StopPending, svc.PausePending: // orange
+									if t.Dark {
+										b.Background(ui.RGB(80, 52, 36)).TextColor(ui.RGB(255, 179, 126))
+									} else {
+										b.Background(ui.RGB(255, 199, 161)).TextColor(ui.RGB(98, 39, 0))
+									}
+								case svc.Running: // green
+									if t.Dark {
+										b.Background(ui.RGB(43, 66, 43)).TextColor(ui.RGB(144, 202, 144))
+									} else {
+										b.Background(ui.RGB(188, 224, 187)).TextColor(ui.RGB(0, 73, 11))
+									}
+								case svc.Paused:
+									b.TextColor(t.TextMuted)
 								}
-							case svc.StartPending, svc.ContinuePending: // blue
-								if t.Dark {
-									b.Background(ui.RGB(37, 60, 90)).TextColor(ui.RGB(161, 202, 255))
-								} else {
-									b.Background(ui.RGB(185, 215, 255)).TextColor(ui.RGB(0, 57, 120))
-								}
-							case svc.StopPending, svc.PausePending: // orange
-								if t.Dark {
-									b.Background(ui.RGB(80, 52, 36)).TextColor(ui.RGB(255, 179, 126))
-								} else {
-									b.Background(ui.RGB(255, 199, 161)).TextColor(ui.RGB(98, 39, 0))
-								}
-							case svc.Running: // green
-								if t.Dark {
-									b.Background(ui.RGB(43, 66, 43)).TextColor(ui.RGB(144, 202, 144))
-								} else {
-									b.Background(ui.RGB(188, 224, 187)).TextColor(ui.RGB(0, 73, 11))
-								}
-							case svc.Paused:
-								b.TextColor(t.TextMuted)
+							})
+							if srv.Description != "" {
+								ui.Text(c, srv.Description).FontSize(12).TextColor(t.TextMuted)
 							}
 						})
-						if srv.Description != "" {
-							ui.Text(c, srv.Description).FontSize(12).TextColor(t.TextMuted)
-						}
-					})
 
-					ui.Row(c).Children(func() {
-						running := false
-						tooltip := "Start"
-						switch svc.State(srv.Status) {
-						case svc.StartPending, svc.Running, svc.ContinuePending:
-							running = true
-							tooltip = "Stop"
-						}
-						disabled := true
-						switch svc.State(srv.Status) {
-						case svc.Stopped, svc.Running, svc.Paused:
-							disabled = false
-						}
-						b := ui.Button(c, "")
-						if c.Direction() == ui.LeftToRight {
-							b.Radius(t.Radius, 0, 0, t.Radius)
-						} else {
-							b.Radius(0, t.Radius, t.Radius, 0)
-						}
-						if disabled {
-							b.Background(t.Surface.Alpha(0.5)).TextColor(t.Text.Alpha(0.5))
-						}
-						if b.BorderEndWidth(0).Tooltip(tooltip).Disabled(disabled).DimDisabled(false).Children(func() {
-							if running {
-								ui.Icon(c, stop)
+						ui.Row(c).Children(func() {
+							running := false
+							tooltip := "Start"
+							switch svc.State(srv.Status) {
+							case svc.StartPending, svc.Running, svc.ContinuePending:
+								running = true
+								tooltip = "Stop"
+							}
+							disabled := true
+							switch svc.State(srv.Status) {
+							case svc.Stopped, svc.Running, svc.Paused:
+								disabled = false
+							}
+							b := ui.Button(c, "")
+							if c.Direction() == ui.LeftToRight {
+								b.Radius(t.Radius, 0, 0, t.Radius)
 							} else {
-								ui.Icon(c, start)
+								b.Radius(0, t.Radius, t.Radius, 0)
 							}
-						}).Clicked() {
-							var err error
-							if srv.Status == Status(svc.Running) {
-								_, err = srv.srv.Control(svc.Stop)
-							} else {
-								err = srv.srv.Start()
+							if disabled {
+								b.Background(t.Surface.Alpha(0.5)).TextColor(t.Text.Alpha(0.5))
 							}
-							if err != nil {
-								a.err, a.message = true, NewError(err).Error()
-							}
-						}
-
-						disabled = true
-						switch svc.State(srv.Status) {
-						case svc.Running, svc.Paused:
-							disabled = false
-						}
-						b = ui.Button(c, "")
-						if disabled {
-							b.Background(t.Surface.Alpha(0.5)).TextColor(t.Text.Alpha(0.5))
-						}
-						if b.Radius(0).Tooltip("Restart").Disabled(disabled).DimDisabled(false).Children(func() {
-							ui.Icon(c, restart)
-						}).Clicked() {
-							go func() {
-								status, err := srv.srv.Control(svc.Stop)
-								if err != nil {
-									a.errs <- NewError(err)
-									return
+							if b.BorderEndWidth(0).Tooltip(tooltip).Disabled(disabled).DimDisabled(false).Children(func() {
+								if running {
+									ui.Icon(c, stop)
+								} else {
+									ui.Icon(c, start)
 								}
-								startTime := time.Now()
-								for status.State != windows.SERVICE_STOPPED {
-									if time.Since(startTime) > 30*time.Second {
-										a.errs <- errors.New("Service stop timed out.")
-										return
-									}
-									time.Sleep(time.Duration(status.WaitHint) * time.Millisecond)
-									status, err = srv.srv.Query()
+							}).Clicked() {
+								var err error
+								if srv.Status == Status(svc.Running) {
+									_, err = srv.srv.Control(svc.Stop)
+								} else {
+									err = srv.srv.Start()
+								}
+								if err != nil {
+									a.err, a.message = true, NewError(err).Error()
+								}
+							}
+
+							disabled = true
+							switch svc.State(srv.Status) {
+							case svc.Running, svc.Paused:
+								disabled = false
+							}
+							b = ui.Button(c, "")
+							if disabled {
+								b.Background(t.Surface.Alpha(0.5)).TextColor(t.Text.Alpha(0.5))
+							}
+							if b.Radius(0).Tooltip("Restart").Disabled(disabled).DimDisabled(false).Children(func() {
+								ui.Icon(c, restart)
+							}).Clicked() {
+								go func() {
+									status, err := srv.srv.Control(svc.Stop)
 									if err != nil {
 										a.errs <- NewError(err)
 										return
 									}
-								}
-								if err = srv.srv.Start(); err != nil {
-									a.errs <- NewError(err)
-								}
-							}()
-						}
-
-						b = ui.Button(c, "")
-						if c.Direction() == ui.LeftToRight {
-							b.Radius(0, t.Radius, t.Radius, 0)
-						} else {
-							b.Radius(t.Radius, 0, 0, t.Radius)
-						}
-						if b.BorderStartWidth(0).Tooltip("Edit").Children(func() {
-							ui.Icon(c, edit)
-						}).Clicked() {
-							if cfg, err := srv.srv.Config(); err != nil {
-								a.err, a.message = true, NewError(err).Error()
-							} else if config, err := GetConfig(srv.Name); err != nil {
-								a.err, a.message = true, NewError(err).Error()
-							} else {
-								a.form = ServiceConfig{
-									Config: *config,
-									Env:    strings.Join(config.Env, "\n"),
-
-									Name:         srv.Name,
-									Dependencies: strings.Join(cfg.Dependencies, "\n"),
-									Description:  cfg.Description,
-									StartType:    getStartType(cfg.StartType, cfg.DelayedAutoStart),
-								}
-
-								a.editing = true
-								a.new = false
+									startTime := time.Now()
+									for status.State != windows.SERVICE_STOPPED {
+										if time.Since(startTime) > 30*time.Second {
+											a.errs <- errors.New("Service stop timed out.")
+											return
+										}
+										time.Sleep(time.Duration(status.WaitHint) * time.Millisecond)
+										status, err = srv.srv.Query()
+										if err != nil {
+											a.errs <- NewError(err)
+											return
+										}
+									}
+									if err = srv.srv.Start(); err != nil {
+										a.errs <- NewError(err)
+									}
+								}()
 							}
-						}
+
+							b = ui.Button(c, "")
+							if c.Direction() == ui.LeftToRight {
+								b.Radius(0, t.Radius, t.Radius, 0)
+							} else {
+								b.Radius(t.Radius, 0, 0, t.Radius)
+							}
+							if b.BorderStartWidth(0).Tooltip("Edit").Children(func() {
+								ui.Icon(c, edit)
+							}).Clicked() {
+								if cfg, err := srv.srv.Config(); err != nil {
+									a.err, a.message = true, NewError(err).Error()
+								} else if config, err := GetConfig(srv.Name); err != nil {
+									a.err, a.message = true, NewError(err).Error()
+								} else {
+									a.form = ServiceConfig{
+										Config: *config,
+										Env:    strings.Join(config.Env, "\n"),
+
+										Name:         srv.Name,
+										Dependencies: strings.Join(cfg.Dependencies, "\n"),
+										Description:  cfg.Description,
+										StartType:    getStartType(cfg.StartType, cfg.DelayedAutoStart),
+									}
+
+									a.editing = true
+									a.new = false
+								}
+							}
+						})
 					})
-				})
-			}
+				}
+			})
 		})
-	})
+	} else {
+		ui.Column(c).Fill().Gap(4).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, circle).Size(42, 42).TextColor(t.TextMuted)
+			ui.Text(c, "No Data").FontSize(20).TextColor(t.TextMuted)
+		})
+	}
 
 	t.Spacing = 3
 	ui.Modal(c, &a.editing, func() {
