@@ -403,14 +403,18 @@ func (a *App) view(c *ui.Context) {
 						a.selectFileButton(c, &a.form.Stderr, false)
 					})
 				})
-				ui.Field(c, "Startup type", func() {
-					ui.Select(c, &a.form.StartType, []string{AUTO_START, AUTO_START_DELAYED, MANUAL, DISABLED})
-				})
 				ui.Field(c, "Environment variables", func() {
 					ui.TextArea(c, &a.form.Env)
 				})
 				ui.Field(c, "Dependencies", func() {
 					ui.TextArea(c, &a.form.Dependencies)
+				})
+				ui.Field(c, "Startup type", func() {
+					ui.RadioGroup(c, func() {
+						for _, startType := range []string{AUTO_START, AUTO_START_DELAYED, MANUAL, DISABLED} {
+							ui.Radio(c, &a.form.StartType, startType, startType)
+						}
+					})
 				})
 			})
 		})
