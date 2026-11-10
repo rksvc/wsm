@@ -419,7 +419,7 @@ func (a *App) view(c *ui.Context) {
 			})
 		})
 
-		ui.Row(c).PaddingEnd(20).Gap(8).Justify(ui.End).Children(func() {
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, "Cancel").Clicked() {
 				a.editing = false
 			}
